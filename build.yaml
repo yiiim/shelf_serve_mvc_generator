@@ -1,0 +1,14 @@
+targets:
+  $default:
+    builders:
+      shelf_serve_mvc_generator|shelf_serve_mvc:
+        enabled: true
+
+builders:
+  shelf_serve_mvc:
+    import: "package:shelf_serve_mvc_generator/src/builder.dart"
+    builder_factories: ["shelfServeMvc"]
+    build_extensions: {".dart": [".shelf_serve_mvc.g.part"]}
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen:combining_builder"]
