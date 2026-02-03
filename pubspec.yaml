@@ -9,18 +9,17 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
-  source_gen: ^1.0.0
-  build: ^2.0.0
+  source_gen: ^4.0.0
+  build: ^4.0.0
   http_methods: ^1.0.0
   build_config: ^1.0.0
   code_builder: ^4.2.0
   shelf: ^1.1.0
-  json_annotation: ^4.8.1
-  analyzer: ^6.0.0
+  analyzer: ^8.0.0
   shelf_serve_mvc: ^1.0.0-dev.1
 
 dev_dependencies:
-  build_runner: ^2.0.0
+  build_runner: ^2.7.0
   build_verify: ^3.0.0
   lints: ^2.0.0
   test: ^1.21.0

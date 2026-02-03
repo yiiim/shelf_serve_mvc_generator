@@ -32,14 +32,14 @@ extension DartTypeExtension on DartType {
 }
 
 class ShelfServeMvcGenerator extends Generator {
-  static bool _checkParameterElement(ParameterElement element) {
+  static bool _checkParameterElement(FormalParameterElement element) {
     if (element.type.isDartCoreType) {
       return true;
     }
     if (element.type.element?.kind != ElementKind.CLASS) {
       return false;
     }
-    ClassElement cls = element.type.element as ClassElement;
+    final cls = element.type.element as ClassElement;
     if (cls.constructors.any((e) => e.isFactory && e.name == 'fromRequest')) {
       return true;
     }
@@ -75,21 +75,21 @@ class ShelfServeMvcGenerator extends Generator {
   Future<String?> generate(LibraryReader library, BuildStep buildStep) async {
     List<Spec> mixins = [];
     for (final cls in library.classes) {
-      if (cls.methods.any(TypeChecker.fromRuntime(HttpMethod).hasAnnotationOf) == false) {
+      if (cls.methods.any(TypeChecker.typeNamed(HttpMethod, inPackage: "shelf_serve_mvc").hasAnnotationOf) == false) {
         continue;
       }
       List<Method> methods = [];
       List<Code> routerCodes = [];
       for (var method in cls.methods) {
-        final annotations = TypeChecker.fromRuntime(HttpMethod).annotationsOf(method);
+        final annotations = TypeChecker.typeNamed(HttpMethod, inPackage: "shelf_serve_mvc").annotationsOf(method);
         assert(() {
-          if (method.parameters.isEmpty) {
+          if (method.formalParameters.isEmpty) {
             return true;
           }
-          if (method.type.optionalParameterNames.isNotEmpty) {
+          if (method.type.optionalParameterTypes.isNotEmpty) {
             return false;
           }
-          return method.parameters.every((element) => _checkParameterElement(element));
+          return method.formalParameters.every((element) => _checkParameterElement(element));
         }());
         if (annotations.isEmpty) {
           continue;
@@ -110,67 +110,45 @@ class ShelfServeMvcGenerator extends Generator {
               ..returns = refer('Future<Response>')
               ..body = Block(
                 (b) {
-                  for (var i = 0; i < method.type.normalParameterNames.length; i++) {
-                    DartType parameterType = method.type.normalParameterTypes[i];
-                    if (!parameterType.isDartBasicType) {
-                      b.addExpression(
-                        refer("_fieldParser").property("modelParsers").index(refer(parameterType.element!.name!)).assign(
-                              refer("MvcFactoryRequestModelParser<${parameterType.element!.name!}>").newInstance(
-                                [
-                                  refer("(data) => ${parameterType.element!.name!}.fromRequestField(data)"),
-                                ],
+                  b.addExpression(
+                    refer("routedRequest").assign(refer("request")),
+                  );
+                  int index = 0;
+                  for (var element in method.type.formalParameters) {
+                    if (element.isRequired || element.isNamed) {
+                      if (!element.type.isDartBasicType) {
+                        b.addExpression(
+                          refer("_fieldParser").property("modelParsers").index(refer(element.type.getDisplayString())).assign(
+                                refer("MvcFactoryRequestModelParser<${element.type.getDisplayString()}>").newInstance(
+                                  [
+                                    refer("(data) => ${element.type.getDisplayString()}.fromRequestField(data)"),
+                                  ],
+                                ),
                               ),
-                            ),
-                      );
-                    }
-                    b.addExpression(
-                      declareFinal('p$i').assign(
-                        _readFieldExpression(
-                          method.type.normalParameterTypes[i],
-                          fieldName: method.parameters.length > 1 ? method.type.normalParameterNames[i] : null,
-                          isRequired: method.type.normalParameterTypes[i].nullabilitySuffix == NullabilitySuffix.none,
+                        );
+                      }
+                      b.addExpression(
+                        declareFinal('p$index').assign(
+                          _readFieldExpression(
+                            element.type,
+                            fieldName: element.name,
+                            isRequired: element.type.nullabilitySuffix == NullabilitySuffix.none,
+                          ),
                         ),
-                      ),
-                    );
-                    b.statements.add(
-                      Code("""
-                      if(p$i.error != null){
-                        return Response(400, body:p$i.error!);
+                      );
+                      b.statements.add(
+                        Code("""
+                      if(p$index.error != null){
+                        return Response(400, body:p$index.error!);
                       }"""),
-                    );
-                  }
-                  for (var element in method.type.namedParameterTypes.entries) {
-                    if (!element.value.isDartBasicType) {
-                      b.addExpression(
-                        refer("_fieldParser").property("modelParsers").index(refer(element.value.element!.name!)).assign(
-                              refer("MvcFactoryRequestModelParser<${element.value.element!.name!}>").newInstance(
-                                [
-                                  refer("(data) => ${element.value.element!.name!}.fromRequestField(data)"),
-                                ],
-                              ),
-                            ),
                       );
                     }
-                    b.addExpression(
-                      declareFinal("namedP${element.key}").assign(
-                        _readFieldExpression(
-                          element.value,
-                          fieldName: element.key,
-                          isRequired: method.parameters.firstWhere((e) => e.name == element.key).isRequired,
-                        ),
-                      ),
-                    );
-                    b.statements.add(
-                      Code("""
-                        if(namedP${element.key}.error != null){
-                          return Response(400, body: namedP${element.key}.error);
-                        }"""),
-                    );
+                    index++;
                   }
                   b.addExpression(
-                    refer("(this as ${cls.name})").property(method.name).call(
+                    refer("(this as ${cls.name})").property(method.name!).call(
                       List.generate(
-                        method.type.normalParameterNames.length,
+                        method.type.normalParameterTypes.length,
                         (e) => refer(
                           "p$e.value${method.type.normalParameterTypes[e].nullabilitySuffix == NullabilitySuffix.none ? "!" : ""}",
                         ),
@@ -180,7 +158,7 @@ class ShelfServeMvcGenerator extends Generator {
                           return MapEntry(
                             key,
                             refer(
-                              "namedP$key.value${value.nullabilitySuffix == NullabilitySuffix.none ? (method.parameters.firstWhere((e) => e.name == key).defaultValueCode != null ? "?? ${method.parameters.firstWhere((e) => e.name == key).defaultValueCode}" : "!") : ""}",
+                              "namedP$key.value${value.nullabilitySuffix == NullabilitySuffix.none ? (method.formalParameters.firstWhere((e) => e.name == key).defaultValueCode != null ? "?? ${method.formalParameters.firstWhere((e) => e.name == key).defaultValueCode}" : "!") : ""}",
                             ),
                           );
                         },
@@ -211,7 +189,16 @@ class ShelfServeMvcGenerator extends Generator {
               },
             ),
           );
-
+          builder.fields.add(
+            Field(
+              (b) {
+                b.modifier = FieldModifier.var$;
+                b.late = true;
+                b.type = refer("Request");
+                b.name = "routedRequest";
+              },
+            ),
+          );
           builder.methods.add(
             Method(
               (b) => b
