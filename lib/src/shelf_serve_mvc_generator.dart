@@ -131,7 +131,7 @@ class ShelfServeMvcGenerator extends Generator {
                         declareFinal('p$index').assign(
                           _readFieldExpression(
                             element.type,
-                            fieldName: element.name,
+                            fieldName: method.type.formalParameters.length == 1 && !element.isNamed ? null : element.name,
                             isRequired: element.type.nullabilitySuffix == NullabilitySuffix.none,
                           ),
                         ),
